@@ -1,26 +1,23 @@
-# Empezar con ControlGPS
+# Guía rápida sin correo
 
-## Dueño o administrador
+## Administrador
 
-1. **Crear cuenta**: nombre, empresa, correo y contraseña de 12+ caracteres.
-2. Abrir el correo de confirmación e iniciar sesión. Una cuenta existente de Supabase puede usar su contraseña actual.
-3. **Crear mi empresa**: confirmar nombre y nombre del administrador. La empresa se crea en el servidor junto con el perfil administrador.
-4. **Empresa**: editar nombre. **Proyectos**: crear pin y radio. **Empleados**: invitar personas.
-5. Esperar a que cada empleado acepte la invitación y asignarle sus proyectos.
-6. Revisar **Resumen** y **Asistencias**, filtrar reportes, exportar CSV o corregir horarios con motivo auditado.
+Crear cuenta → acceso inmediato → Crear mi empresa → Seguridad → guardar clave personal de recuperación.
+
+Crear proyectos y radios. En Empleados, introducir nombre y correo de referencia y pulsar **Generar código privado**. Copiar el código antes de salir de la pantalla y entregarlo a la persona correcta por un canal privado. No se envía correo. El código concede acceso, vence a los 7 días y funciona una vez. Renovarlo invalida el anterior; también se puede revocar.
+
+El empleado canjea el código; luego aparece en el directorio y puedes asignarlo a proyectos. El correo de referencia no es prueba de identidad ni vincula la cuenta que puede usar el código.
 
 ## Empleado
 
-1. Usar el mismo correo de la invitación; abrir el enlace, establecer contraseña cuando corresponda e iniciar sesión.
-2. **Aceptar invitación** para ingresar a la empresa. Las invitaciones vencen a los 7 días; el administrador puede renovarlas.
-3. Seleccionar proyecto, aceptar monitoreo y **Marcar entrada**. Se exige GPS dentro del radio y precisión de 50 m o mejor.
-4. Mantener la web activa. Fuera de zona se registra una alerta; no se cierra la jornada.
-5. **Marcar salida**. Fuera de zona o sin GPS, indicar motivo.
+Crear cuenta o iniciar sesión → pegar código en **Ingresar con código de empresa** → Unirme a la empresa → Seguridad → guardar clave personal.
 
-Una cuenta pertenece a una empresa en este MVP. Para otra empresa usa otra cuenta. Las empresas tienen datos separados; el registro no permite entrar a una empresa ajena. Las contraseñas del Supabase compartido también afectan Business Helper.
+Seleccionar proyecto → consentir monitoreo → Marcar entrada dentro del radio con GPS preciso → mantener web activa → Marcar salida, con motivo si está fuera o sin GPS.
 
-## Publicación y pruebas
+## Recuperación e instalación
 
-Vercel requiere las cuatro variables de `.env.example`, ambas migraciones, esquema expuesto y función de invitación. El dominio definitivo debe aparecer en Redirect URLs (welcome=1 y confirmed=1) y CONTROLGPS_APP_ORIGINS. No agregar wildcards de dominios ajenos.
+En login, **Olvidé mi contraseña** requiere el correo identificador, la clave RC guardada y una contraseña nueva. La clave se consume. Iniciar sesión y generar otra desde Seguridad. Nadie debe pedirte la clave personal.
 
-Antes de operar: validar SMTP con correos reales y probar GPS de Android/iOS en HTTPS. Un navegador no garantiza GPS con teléfono bloqueado o pestaña cerrada. Las pruebas automatizadas usan lecturas controladas, no sensores físicos.
+**Instalar webapp** permite agregarla a Android/escritorio; en Safari iOS usa Compartir → Agregar a pantalla de inicio. El modo offline no registra asistencias, y la instalación no permite GPS fiable con el teléfono bloqueado.
+
+Sin contraseña, sin clave y sin sesión abierta, contactar al propietario del servicio para verificar identidad por un canal independiente. Una cuenta pertenece a una empresa; para otra usa otra cuenta. Auth está compartido con Business Helper y los cambios de contraseña afectan ambas apps.

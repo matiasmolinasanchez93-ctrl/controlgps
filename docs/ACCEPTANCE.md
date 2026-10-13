@@ -2,14 +2,14 @@
 
 Estado inicial: **pendiente**. Usar dos cuentas de empleado, una de administrador y un teléfono con GPS, bajo HTTPS. No introducir registros de prueba en producción como si fueran jornadas reales. Registrar fecha, navegador, usuario de prueba y resultado de cada caso. La ubicación falsa en herramientas de desarrollo sirve para verificar reglas, no para probar GPS físico.
 
-- [ ] Verificar ambas migraciones sin repetirlas; RLS en nueve tablas, company_id, llaves compuestas y índice one_open_shift. Mantener confirmación de correo y los redirects de Business Helper.
-- [ ] Crear cuenta desde la app, confirmar correo y crear empresa. Solo administra la nueva empresa. Crear otra empresa con otra cuenta; un correo sin confirmar no puede crearla.
+- [ ] Verificar las tres migraciones sin repetirlas; RLS en nueve tablas, company_id, llaves compuestas y índice one_open_shift. Registro inmediato sin confirmación; conservar los redirects de Business Helper.
+- [ ] Crear cuenta desde la app sin correo de confirmación y crear empresa. Solo administra la nueva empresa. Crear otra empresa con otra cuenta; el correo declarado no concede acceso a una empresa existente.
 - [ ] Metadatos role:admin y company_id ajeno no conceden perfil, rol ni membresía. El cliente no puede actualizar su rol.
 - [ ] Admin B no puede leer/modificar proyectos, perfiles, jornadas, eventos, ajustes o invitaciones de A, ni asignar empleados ajenos. Validar también las RPC.
-- [ ] Renovar/revocar invitaciones. Otro correo o una invitación expirada/revocada no concede acceso. Una cuenta desactivada no puede crear otra empresa para evadir controles.
+- [ ] Renovar/revocar invitaciones. Un código inválido, usado, expirado o revocado no concede acceso. El código válido permite ingresar aunque el correo de referencia sea distinto. Una cuenta desactivada no puede crear otra empresa para evadir controles.
 - [ ] Crear proyecto con pin en mapa, radio 100, nombre y dirección. Mover pin y ajustar radio; el círculo cambia. Guardar, recargar y verificar coordenadas persistidas. Probar radios 9 y 10001: rechazados por base de datos.
 - [ ] Editar y archivar proyecto. Empleado no puede iniciar allí; historial se conserva. Reactivarlo.
-- [ ] Invitar empleado con SMTP real; abrir correo, establecer contraseña y aceptar invitación antes de asignar proyectos. Para cuenta existente: compartir enlace y aceptar sin cambiar contraseña. Como empleado/sin token: 403/401, sin crear usuario.
+- [ ] Generar código privado CG, compartirlo por un canal seguro y aceptarlo desde una cuenta autenticada. Renovar invalida el código anterior. Como empleado/sin token: 403/401.
 - [ ] Asignar empleado al proyecto, recargar y comprobar que solo ve proyectos autorizados. Desasignar y comprobar que la entrada es denegada por el servidor.
 - [ ] Con segundo empleado, consultar perfiles/asistencias/eventos del primero usando API: datos inaccesibles. Intentar insertar o actualizar asistencia directa: denegado.
 - [ ] Dentro del radio, aceptar monitoreo y Marcar entrada. Probar permiso denegado antes de permitirlo. No debe existir registro al denegar. Permitir GPS; confirmar precisión ≤50 m, hora del servidor y jornada abierta.
@@ -23,11 +23,13 @@ Estado inicial: **pendiente**. Usar dos cuentas de empleado, una de administrado
 - [ ] Filtrar reportes por empleado, proyecto y fechas. Verificar horarios de Guatemala, jornadas incompletas, horas y alertas de salida. Exportar CSV, abrirlo en Excel y verificar acentos/columnas. Nombre que empiece con `=` no se ejecuta como fórmula.
 - [ ] Corregir entrada/salida con motivo; verificar before/after, UUID de admin y timestamp en `attendance_adjustments`. Motivo vacío, salida anterior a entrada y cambios como empleado: denegados. Reabrir registro con otra jornada abierta: rechazado.
 - [ ] Desactivar empleado: no puede realizar RPC ni leer registros de asistencia, incluso con token previo. Se conserva historial; admin puede cerrar una jornada pendiente con ajuste.
-- [ ] Recuperar contraseña mediante correo, abrir enlace HTTPS, cambiarla e ingresar otra vez.
+- [ ] Generar y guardar clave RC tras confirmar contraseña. Recuperar sin correo, comprobar que la clave solo sirve una vez y que las sesiones anteriores quedan bloqueadas.
 - [ ] Bloquear servidor de tiles: aviso visible; mapa degradado, edición por coordenadas y validación GPS independientes.
 - [ ] Revisar teléfono Android/iOS real y escritorio: navegación, formularios, lectura de mapa, teclados, foco, contraste, doble toque, errores y actualización.
 - [ ] Vercel muestra deploy exitoso, URL HTTPS accesible; configurar esa URL en Supabase y CONTROLGPS_APP_ORIGINS y repetir login/invitación/GPS antes de habilitar empleados.
 
-No se han marcado estos casos como realizados: necesitan credenciales, correo y dispositivos reales.
+No se han marcado estos casos como realizados: necesitan dispositivos reales para comprobar los sensores físicos.
 
-Automatizado por separado: SQL/PGlite y Chromium con GPS controlado. El Supabase alojado se probó mediante scripts/verify-tenancy-live.sql con rollback completo; no quedaron cuentas ni jornadas de prueba. Correo y GPS físico requieren aceptación manual.
+Automatizado por separado: SQL/PGlite y Chromium con GPS controlado. El Supabase alojado se probó mediante scripts/verify-tenancy-live.sql con rollback completo; no quedaron cuentas ni jornadas de prueba. Registro, códigos y recuperación se comprobaron también contra Supabase alojado, eliminando las cuentas temporales. GPS físico requiere aceptación manual.
+
+- [ ] Instalar la webapp en Android/iOS; abrir sin conexión y comprobar el aviso y que no registra asistencia. El GPS requiere la app visible.

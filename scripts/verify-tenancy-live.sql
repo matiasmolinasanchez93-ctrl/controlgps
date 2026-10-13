@@ -8,9 +8,12 @@ select set_config('request.jwt.claim.sub','fd000000-0000-4000-8000-000000000001'
 set local role authenticated;
 select controlgps.create_company('Prueba temporal A','Administrador A');
 insert into controlgps.projects(id,name,latitude,longitude) values('fd000000-0000-4000-8000-000000000004','Obra temporal A',0,0);
-select controlgps.prepare_invitation('controlgps-test-e@invalid.example','Empleado temporal');
-select set_config('request.jwt.claim.sub','fd000000-0000-4000-8000-000000000003',true);
-select controlgps.accept_invitation((select id from controlgps.my_invitations() limit 1));
+do $$declare private_code text; result jsonb; begin
+ private_code := controlgps.issue_invitation_code('controlgps-test-e@invalid.example','Empleado temporal')->>'code';
+ perform set_config('request.jwt.claim.sub','fd000000-0000-4000-8000-000000000003',true);
+ result := controlgps.accept_invitation_code(private_code);
+ if not (result->>'ok')::boolean then raise exception 'No se aceptó el código privado'; end if;
+end$$;
 select set_config('request.jwt.claim.sub','fd000000-0000-4000-8000-000000000001',true);
 insert into controlgps.project_assignments(project_id,employee_id) values('fd000000-0000-4000-8000-000000000004','fd000000-0000-4000-8000-000000000003');
 select set_config('request.jwt.claim.sub','fd000000-0000-4000-8000-000000000003',true);

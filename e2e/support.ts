@@ -18,9 +18,13 @@ export async function harness(
   await db.exec(
     `create role anon;create role authenticated;create role service_role;create schema auth;create table auth.users(id uuid primary key,email text,raw_user_meta_data jsonb,email_confirmed_at timestamptz);create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;grant usage on schema auth to authenticated;grant execute on function auth.uid() to authenticated;`,
   );
+  await db.exec(
+    "create table auth.sessions(id uuid primary key,user_id uuid,created_at timestamptz default now());",
+  );
   for (const name of [
     "202610130001_controlgps.sql",
     "202610130002_companies.sql",
+    "202610130003_private_codes.sql",
   ])
     await db.exec(
       readFileSync(
@@ -45,6 +49,9 @@ export async function harness(
       );
   }
   await db.exec("set role authenticated");
+  await db.exec(
+    `select set_config('request.jwt.claims','{"amr":[{"method":"password","timestamp":${Math.floor(Date.now() / 1000)}}]}',false)`,
+  );
   const user = {
     id: uid,
     aud: "authenticated",
@@ -162,8 +169,7 @@ export async function harness(
       });
     if (url.pathname.includes("/auth/v1/")) {
       if (url.pathname.endsWith("/user")) return reply(user);
-      if (url.pathname.endsWith("/signup"))
-        return reply({ user, session: null });
+      if (url.pathname.endsWith("/signup")) return reply(auth);
       if (url.pathname.endsWith("/logout")) return reply({});
       return reply(auth);
     }
@@ -174,7 +180,26 @@ export async function harness(
         return route.abort("internetdisconnected");
       try {
         let result: unknown;
-        if (table === "check_in")
+        if (
+          [
+            "session_is_valid",
+            "generate_recovery_code",
+            "recovery_status",
+          ].includes(table)
+        )
+          result = (
+            await db.query<{ value: unknown }>(
+              `select controlgps.${table}() as value`,
+            )
+          ).rows[0].value;
+        else if (table === "accept_invitation_code")
+          result = (
+            await db.query<{ value: unknown }>(
+              "select controlgps.accept_invitation_code($1) as value",
+              [args.p_code],
+            )
+          ).rows[0].value;
+        else if (table === "check_in")
           result = (
             await db.query<{ value: unknown }>(
               "select to_jsonb(controlgps.check_in($1,$2,$3,$4,$5)) as value",
@@ -283,7 +308,9 @@ export async function harness(
 }
 export async function login(page: Page) {
   await page.goto("/");
-  await page.getByLabel("Correo electrónico").fill("prueba@example.com");
+  await page
+    .getByLabel("Correo de inicio de sesión")
+    .fill("prueba@example.com");
   await page
     .getByLabel("Contraseña", { exact: true })
     .fill("ContraseñaDePrueba123!");

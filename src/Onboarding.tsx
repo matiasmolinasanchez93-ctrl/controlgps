@@ -1,36 +1,21 @@
 import { useEffect, useState } from "react";
 import { supabase, friendlyError } from "./lib";
-import { Building2, LogOut, UserPlus } from "lucide-react";
-type Invite = {
-  id: string;
-  company_name: string;
-  full_name: string;
-  expires_at: string;
-};
+import { Building2, LogOut, KeyRound } from "lucide-react";
 export default function Onboarding({
   onComplete,
 }: {
   onComplete: () => Promise<void>;
 }) {
-  const [invitations, setInvitations] = useState<Invite[]>([]),
-    [busy, setBusy] = useState(false),
-    [loading, setLoading] = useState(true),
+  const [busy, setBusy] = useState(false),
     [message, setMessage] = useState(""),
     [company, setCompany] = useState(""),
-    [name, setName] = useState("");
-  const load = async () => {
-    const r = await supabase!.rpc("my_invitations");
-    if (r.error) throw r.error;
-    setInvitations(r.data || []);
-  };
+    [name, setName] = useState(""),
+    [code, setCode] = useState("");
   useEffect(() => {
     supabase!.auth.getUser().then(({ data }) => {
       setName(data.user?.user_metadata.full_name || "");
       setCompany(data.user?.user_metadata.controlgps_company_name || "");
     });
-    load()
-      .catch((e) => setMessage(friendlyError(e)))
-      .finally(() => setLoading(false));
   }, []);
   const run = async (fn: () => Promise<void>) => {
     if (busy) return;
@@ -49,73 +34,69 @@ export default function Onboarding({
     <div className="setup onboarding">
       <div className="section-head">
         <h1>Tu espacio de trabajo</h1>
-        <button onClick={() => void supabase!.auth.signOut()}>
+        <button
+          disabled={busy}
+          onClick={() =>
+            void run(async () => {
+              const r = await supabase!.auth.signOut();
+              if (r.error) throw r.error;
+            })
+          }
+        >
           <LogOut size={16} />
           Salir
         </button>
       </div>
-      <p>Elige cómo empezar. Tus datos se compartirán solo con tu empresa.</p>
+      <p>
+        Crea tu empresa o ingresa con el código privado que te entregó tu
+        administrador.
+      </p>
       {message && (
         <div role="alert" className="notice">
           {message}
         </div>
       )}
-      {loading ? (
-        <div className="card">Consultando invitaciones…</div>
-      ) : invitations.length > 0 ? (
-        <section className="card">
-          <h2>
-            <UserPlus size={20} /> Invitaciones para tu cuenta
-          </h2>
-          <p>
-            Tu correo tiene invitaciones pendientes. Al aceptar ingresarás como
-            empleado.
-          </p>
-          {invitations.map((i) => (
-            <div className="invitation-row" key={i.id}>
-              <div>
-                <strong>{i.company_name}</strong>
-                <small>
-                  {i.full_name} · Invitación válida por 7 días desde su envío
-                </small>
-              </div>
-              <button
-                disabled={busy}
-                className="primary"
-                onClick={() =>
-                  void run(async () => {
-                    const r = await supabase!.rpc("accept_invitation", {
-                      p_invitation: i.id,
-                    });
-                    if (r.error) throw r.error;
-                  })
-                }
-              >
-                Aceptar invitación
-              </button>
-            </div>
-          ))}
-        </section>
-      ) : (
-        <div className="card">
-          <h2>¿Te invitó tu empresa?</h2>
-          <p>
-            Inicia sesión con el mismo correo de la invitación. Pide al
-            administrador que la envíe o la renueve si no aparece.
-          </p>
-          <button
-            disabled={busy}
-            onClick={() => {
-              setBusy(true);
-              void load()
-                .catch((e) => setMessage(friendlyError(e)))
-                .finally(() => setBusy(false));
-            }}
-          >
-            Actualizar invitaciones
-          </button>
-        </div>
-      )}
+      <form
+        className="card"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void run(async () => {
+            const r = await supabase!.rpc("accept_invitation_code", {
+              p_code: code,
+            });
+            if (r.error) throw r.error;
+            if (!r.data?.ok)
+              throw Error(r.data?.message || "Código no válido.");
+          });
+        }}
+      >
+        <h2>
+          <KeyRound size={20} />
+          Ingresar con código de empresa
+        </h2>
+        <p>
+          El código es personal, vence en 7 días y solo se puede usar una vez.
+          El correo por sí solo no concede acceso.
+        </p>
+        <label>
+          Código privado de invitación
+          <input
+            name="invitation_code"
+            required
+            minLength={32}
+            maxLength={100}
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            autoComplete="off"
+            autoCapitalize="characters"
+            spellCheck={false}
+            placeholder="CG-…"
+          />
+        </label>
+        <button disabled={busy} className="primary">
+          Unirme a la empresa
+        </button>
+      </form>
       <form
         className="card"
         onSubmit={(e) => {
@@ -134,8 +115,8 @@ export default function Onboarding({
         </span>
         <h2>Crear una empresa</h2>
         <p>
-          Serás administrador de una empresa nueva. Si eres empleado, acepta la
-          invitación de tu empresa.
+          Serás administrador de tu empresa nueva. Si eres empleado, usa el
+          código privado de tu empresa.
         </p>
         <label>
           Nombre de la empresa
@@ -163,6 +144,11 @@ export default function Onboarding({
           Crear mi empresa
         </button>
       </form>
+      <div className="notice">
+        El correo es un identificador de inicio de sesión, sin verificación de
+        propiedad. Al ingresar guarda una clave personal de recuperación desde
+        Seguridad. Nadie debe pedirte tu contraseña o esa clave.
+      </div>
     </div>
   );
 }

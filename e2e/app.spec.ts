@@ -1,5 +1,87 @@
 import { test, expect } from "@playwright/test";
 import { harness, login, setGPS } from "./support";
+test("código privado incorpora empleado sin comprobación del correo", async ({
+  page,
+}) => {
+  const h = await harness(page, "new");
+  try {
+    await h.db.exec("reset role");
+    await h.db.exec(
+      "insert into auth.users values('90000000-0000-0000-0000-000000000001','owner@example.com','{}',null);select set_config('request.jwt.claim.sub','90000000-0000-0000-0000-000000000001',false)",
+    );
+    await h.db.query(
+      "select controlgps.create_company('Empresa invitante','Dueño')",
+    );
+    const r = await h.db.query<{ value: { code: string } }>(
+      "select controlgps.issue_invitation_code('referencia@example.com','Empleado con código') as value",
+    );
+    await h.db.exec(
+      "select set_config('request.jwt.claim.sub','10000000-0000-0000-0000-000000000001',false);set role authenticated",
+    );
+    await login(page);
+    await page
+      .getByLabel("Código privado de invitación")
+      .fill("CG-00000000000000000000000000000000");
+    await page.getByRole("button", { name: "Unirme a la empresa" }).click();
+    await expect(page.getByRole("alert")).toContainText("Código inválido");
+    await page
+      .getByLabel("Código privado de invitación")
+      .fill(r.rows[0].value.code);
+    await page.getByRole("button", { name: "Unirme a la empresa" }).click();
+    await expect(page.locator("header")).toContainText("Empresa invitante");
+    await expect(
+      page.getByRole("heading", { name: "Mi jornada", exact: true }),
+    ).toBeVisible();
+  } finally {
+    await h.db.close();
+  }
+});
+test("recuperación genera clave después de reautenticar sin desmontar la pantalla", async ({
+  page,
+}) => {
+  const h = await harness(page);
+  try {
+    await login(page);
+    await page.getByRole("button", { name: "Seguridad", exact: true }).click();
+    await page
+      .getByLabel("Confirma tu contraseña actual")
+      .fill("ContraseñaDePrueba123!");
+    await page
+      .getByRole("button", { name: "Generar clave de recuperación" })
+      .click();
+    await expect(page.locator(".private-code")).toContainText("RC-");
+    expect(
+      (await h.db.query("select controlgps.recovery_status() as value"))
+        .rows[0],
+    ).toEqual({ value: { configured: true } });
+  } finally {
+    await h.db.close();
+  }
+});
+test("PWA muestra instrucciones de instalación y avisa sin conexión", async ({
+  page,
+}) => {
+  const h = await harness(page, "new");
+  try {
+    await page.goto("/");
+    await page.getByRole("button", { name: "Instalar webapp" }).click();
+    await expect(
+      page.getByText("Agregar ControlGPS al dispositivo"),
+    ).toBeVisible();
+    await page.evaluate(() => {
+      Object.defineProperty(navigator, "onLine", {
+        configurable: true,
+        value: false,
+      });
+      window.dispatchEvent(new Event("offline"));
+    });
+    await expect(page.locator(".offline-banner")).toContainText(
+      "No se pueden confirmar entradas",
+    );
+  } finally {
+    await h.db.close();
+  }
+});
 test("ocultar pestaña detiene GPS sin cerrar la jornada y reanuda al volver", async ({
   page,
 }) => {
@@ -66,7 +148,7 @@ test("fallo de tiles muestra aviso y no impide la validación GPS", async ({
     await h.db.close();
   }
 });
-test("registro, confirmación de contraseña y mensaje de correo", async ({
+test("registro inmediato sin correo y confirmación de contraseña", async ({
   page,
 }) => {
   const h = await harness(page, "new");
@@ -80,7 +162,9 @@ test("registro, confirmación de contraseña y mensaje de correo", async ({
       .getByLabel("Nombre de tu empresa")
       .fill("Constructora de prueba");
     await page.getByLabel("Tu nombre completo").fill("Persona de prueba");
-    await page.getByLabel("Correo electrónico").fill("prueba@example.com");
+    await page
+      .getByLabel("Correo de inicio de sesión")
+      .fill("prueba@example.com");
     await page
       .getByLabel("Contraseña", { exact: true })
       .fill("MiContraseña123!");
@@ -89,7 +173,9 @@ test("registro, confirmación de contraseña y mensaje de correo", async ({
     await expect(page.getByRole("alert")).toContainText("no coinciden");
     await page.getByLabel("Confirmar contraseña").fill("MiContraseña123!");
     await page.locator(".login-form button.primary").click();
-    await expect(page.getByRole("alert")).toContainText("Revisa tu correo");
+    await expect(
+      page.getByRole("heading", { name: "Tu espacio de trabajo" }),
+    ).toBeVisible();
     expect(
       (await h.db.query("select * from controlgps.companies")).rows,
     ).toHaveLength(0);

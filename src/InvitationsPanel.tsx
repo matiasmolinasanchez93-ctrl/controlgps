@@ -28,9 +28,9 @@ export default function InvitationsPanel({
         </button>
       </div>
       <p>
-        Los empleados deben iniciar sesión con el correo invitado y aceptar la
-        invitación. Para renovar una invitación pendiente, vuelve a enviarla
-        desde el formulario.
+        Los empleados deben ingresar el código privado. Se muestra una sola vez
+        al generarlo; para reemplazar uno perdido, genera otro desde el
+        formulario. Renovarlo invalida el anterior.
       </p>
       {message && (
         <div className="notice" role="alert">
@@ -42,7 +42,7 @@ export default function InvitationsPanel({
           <thead>
             <tr>
               <th>Nombre</th>
-              <th>Correo</th>
+              <th>Correo de referencia</th>
               <th>Estado</th>
               <th>Vence</th>
               <th>Acciones</th>

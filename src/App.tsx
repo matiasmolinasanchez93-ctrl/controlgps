@@ -46,6 +46,7 @@ import AuthPanel from "./AuthPanel";
 import Onboarding from "./Onboarding";
 import CompanySettings from "./CompanySettings";
 import InvitationsPanel from "./InvitationsPanel";
+import SecurityPanel from "./SecurityPanel";
 const blank = {
   name: "",
   description: "",
@@ -66,6 +67,7 @@ export default function App() {
     [page, setPage] = useState("Resumen");
   const [company, setCompany] = useState<Company | null>(null),
     [invitations, setInvitations] = useState<CompanyInvitation[]>([]);
+  const [invitationCode, setInvitationCode] = useState("");
   const [projects, setProjects] = useState<Project[]>([]),
     [people, setPeople] = useState<Profile[]>([]),
     [assignments, setAssignments] = useState<Assignment[]>([]),
@@ -110,6 +112,12 @@ export default function App() {
     } = await supabase!.auth.getUser();
     if (userError) throw userError;
     if (!user) throw Error("La sesión expiró.");
+    const valid = await supabase!.rpc("session_is_valid");
+    if (valid.error) throw valid.error;
+    if (!valid.data) {
+      await supabase!.auth.signOut({ scope: "local" });
+      throw Error("Sesión revocada. Inicia sesión con tu contraseña actual.");
+    }
     const result = await supabase!
       .from("profiles")
       .select("*")
@@ -167,6 +175,7 @@ export default function App() {
       setSession(s);
       if (event === "PASSWORD_RECOVERY") setWelcome(true);
       if (!s) {
+        setInvitationCode("");
         setProfile(null);
         setCompany(null);
         setPeople([]);
@@ -191,12 +200,13 @@ export default function App() {
       void refresh().catch((e) => notify(friendlyError(e)));
     }, 30000);
     return () => clearInterval(t);
-  }, [session, refresh, notify]);
+  }, [session?.user.id, refresh, notify]);
   const run = async (fn: () => Promise<void>) => {
     if (busy) return;
     setBusy(true);
     setMessage("");
     try {
+      if(!navigator.onLine)throw Error('Sin conexión. Reconecta antes de registrar asistencia o guardar cambios.');
       await fn();
     } catch (e) {
       notify(friendlyError(e));
@@ -411,10 +421,12 @@ export default function App() {
         ["Empleados", Users],
         ["Asistencias", ClipboardList],
         ["Empresa", Settings],
+        ["Seguridad", ShieldCheck],
       ] as const)
     : ([
         ["Mi jornada", Navigation],
         ["Historial", ClipboardList],
+        ["Seguridad", ShieldCheck],
       ] as const);
   const todayStart = new Date(dayGT(now) + "T00:00:00-06:00").getTime();
   const todayHours = sessions.reduce(
@@ -610,6 +622,7 @@ export default function App() {
                   <div className="notice">{limitation}</div>
                 </>
               )}
+              {page === "Seguridad" && <SecurityPanel />}
               {admin && page === "Empresa" && company && (
                 <CompanySettings company={company} onSaved={refresh} />
               )}
@@ -714,23 +727,7 @@ export default function App() {
                       e.preventDefault();
                       const form = e.currentTarget;
                       const f = new FormData(form);
-                      const existing =
-                        (e.nativeEvent as SubmitEvent).submitter?.getAttribute(
-                          "value",
-                        ) === "existing";
                       void run(async () => {
-                        if (existing) {
-                          await rpc("enroll_employee", {
-                            p_email: f.get("email"),
-                            p_name: f.get("name"),
-                          });
-                          form.reset();
-                          await refresh();
-                          notify(
-                            "Invitación creada. Comparte el enlace de ControlGPS; el empleado debe iniciar sesión y aceptarla.",
-                          );
-                          return;
-                        }
                         const { data, error } =
                           await supabase!.functions.invoke(
                             "controlgps-invite-employee",
@@ -747,13 +744,13 @@ export default function App() {
                           if (context) {
                             const body = await context.json().catch(() => null);
                             throw Error(
-                              body?.message ||
-                                "No se pudo enviar la invitación.",
+                              body?.message || "No se pudo generar el código.",
                             );
                           }
                           throw error;
                         }
                         form.reset();
+                        setInvitationCode(data.code);
                         await refresh();
                         notify(data.message);
                       });
@@ -762,8 +759,9 @@ export default function App() {
                     <div>
                       <h2>Agregar empleado</h2>
                       <p>
-                        Invita una cuenta nueva o existente. El empleado debe
-                        aceptar la invitación con su correo.
+                        Genera un código para una cuenta nueva o existente.
+                        Entrégalo al empleado por un canal privado después de
+                        comprobar su identidad.
                       </p>
                     </div>
                     <label>
@@ -771,16 +769,43 @@ export default function App() {
                       <input name="name" required maxLength={200} />
                     </label>
                     <label>
-                      Correo
+                      Correo de referencia (sin verificación)
                       <input name="email" required type="email" />
                     </label>
                     <button disabled={busy} className="primary">
-                      Enviar invitación
-                    </button>
-                    <button disabled={busy} type="submit" value="existing">
-                      Agregar cuenta existente
+                      Generar código privado
                     </button>
                   </form>
+                  {invitationCode && (
+                    <div className="notice">
+                      <strong>
+                        Código privado — cópialo ahora. No se volverá a mostrar.
+                      </strong>
+                      <code className="private-code">{invitationCode}</code>
+                      <button
+                        onClick={async () => {
+                          try {
+                            await navigator.clipboard.writeText(invitationCode);
+                            notify(
+                              "Código copiado. Compártelo únicamente con el empleado.",
+                            );
+                          } catch {
+                            notify("Selecciona y copia el código manualmente.");
+                          }
+                        }}
+                      >
+                        Copiar código
+                      </button>
+                      <button onClick={() => setInvitationCode("")}>
+                        Ya lo guardé
+                      </button>
+                      <p>
+                        Este código concede acceso a tu empresa. Vence en 7 días
+                        y funciona una sola vez. El correo de referencia no
+                        determina quién puede canjearlo.
+                      </p>
+                    </div>
+                  )}
                   <InvitationsPanel
                     invitations={invitations}
                     onSaved={refresh}

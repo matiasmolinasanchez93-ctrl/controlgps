@@ -1,4 +1,52 @@
 @import "tailwindcss";
+.install-app {
+  position: fixed;
+  right: 14px;
+  bottom: 14px;
+  z-index: 90;
+}
+.install-app > button {
+  box-shadow: 0 2px 14px #0f172a12;
+  font-size: 11px;
+}
+.install-instructions {
+  position: absolute;
+  right: 0;
+  bottom: 44px;
+  width: min(340px, calc(100vw - 28px));
+  font-size: 12px;
+  margin: 0;
+}
+.offline-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 150;
+  background: #92400e;
+  color: #fff;
+  text-align: center;
+  padding: 8px 15px;
+  font-size: 12px;
+}
+@media (max-width: 700px) {
+  body:has(.app) .install-app {
+    bottom: 76px;
+  }
+}
+.private-code {
+  display: block;
+  overflow-wrap: anywhere;
+  background: #fff;
+  padding: 14px;
+  border: 1px solid #d8e0e8;
+  border-radius: 8px;
+  margin: 14px 0;
+  font-family: ui-monospace, monospace;
+  font-size: 14px;
+  user-select: all;
+  letter-spacing: 0.5px;
+}
 .auth-tabs {
   display: flex;
   gap: 6px;
