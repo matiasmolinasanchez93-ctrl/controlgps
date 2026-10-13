@@ -5,3 +5,8 @@ dist/
 .vercel/
 *.tsbuildinfo
 supabase/.temp/
+test-results/
+playwright-report/
+
+.vercel
+.env*

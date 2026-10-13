@@ -48,20 +48,33 @@ Deno.serve(async (req) => {
       full_name.length > 200
     )
       return reply(400, "Nombre y correo válidos requeridos.");
+    const { error: invitationError } = await client.rpc("prepare_invitation", {
+      p_email: email.trim(),
+      p_name: full_name.trim(),
+    });
+    if (invitationError) return reply(400, invitationError.message);
     const admin = createClient(
       url,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
       { auth: { persistSession: false } },
     );
     const { error } = await admin.auth.admin.inviteUserByEmail(email.trim(), {
-      data: { full_name: full_name.trim(), controlgps_enrolled: true },
+      data: { full_name: full_name.trim() },
       redirectTo: origin + "/?welcome=1",
     });
     if (error) {
+      if (
+        ["email_exists", "user_already_exists"].includes(error.code || "") ||
+        /already.*registered|already.*exists/i.test(error.message)
+      )
+        return reply(
+          200,
+          "La cuenta ya existe. Invitación disponible al iniciar sesión en ControlGPS. Comparte el enlace de acceso; no se envió un correo nuevo.",
+        );
       console.error("Invitación fallida", error.code);
       return reply(
         400,
-        "No se pudo enviar la invitación. Revisa el correo, usuarios existentes y SMTP.",
+        "Se creó la invitación pendiente, pero falló el envío del correo. Revisa SMTP y vuelve a enviarla. Si la cuenta ya existe, comparte el enlace de ControlGPS.",
       );
     }
     return reply(200, "Invitación enviada.");

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import {
   MapPin,
@@ -13,6 +13,7 @@ import {
   RefreshCw,
   Navigation,
   Clock,
+  Settings,
 } from "lucide-react";
 import {
   supabase,
@@ -36,9 +37,15 @@ import type {
   Assignment,
   Attendance,
   LocationEvent,
+  Company,
+  CompanyInvitation,
 } from "./types";
 import ZoneMap from "./Map";
 import { useMonitor } from "./useMonitor";
+import AuthPanel from "./AuthPanel";
+import Onboarding from "./Onboarding";
+import CompanySettings from "./CompanySettings";
+import InvitationsPanel from "./InvitationsPanel";
 const blank = {
   name: "",
   description: "",
@@ -57,6 +64,8 @@ export default function App() {
     [busy, setBusy] = useState(false),
     [message, setMessage] = useState(""),
     [page, setPage] = useState("Resumen");
+  const [company, setCompany] = useState<Company | null>(null),
+    [invitations, setInvitations] = useState<CompanyInvitation[]>([]);
   const [projects, setProjects] = useState<Project[]>([]),
     [people, setPeople] = useState<Profile[]>([]),
     [assignments, setAssignments] = useState<Assignment[]>([]),
@@ -105,14 +114,19 @@ export default function App() {
       .from("profiles")
       .select("*")
       .eq("id", user.id)
-      .single();
-    if (result.error)
-      throw Error(
-        result.error.code === "PGRST116"
-          ? "Tu cuenta todavía no tiene acceso a ControlGPS. Pide al administrador que la agregue."
-          : result.error.message,
-      );
+      .maybeSingle();
+    if (result.error) throw Error(result.error.message);
     setProfile(result.data);
+    if (!result.data) {
+      setCompany(null);
+      setProjects([]);
+      setPeople([]);
+      setAssignments([]);
+      setSessions([]);
+      setEvents([]);
+      setInvitations([]);
+      return;
+    }
     if (!result.data.active)
       throw Error("Tu cuenta está desactivada. Contacta al administrador.");
     const data = await Promise.all([
@@ -121,12 +135,23 @@ export default function App() {
       readAll<Assignment>("project_assignments", "created_at"),
       readAll<Attendance>("attendance_sessions", "check_in_at", false),
       readAll<LocationEvent>("location_events", "recorded_at", false),
+      supabase!
+        .from("companies")
+        .select("*")
+        .eq("id", result.data.company_id)
+        .single(),
+      result.data.role === "admin"
+        ? readAll<CompanyInvitation>("company_invitations", "created_at", false)
+        : Promise.resolve([]),
     ]);
     setProjects(data[0]);
     setPeople(data[1]);
     setAssignments(data[2]);
     setSessions(data[3]);
     setEvents(data[4]);
+    if (data[5].error) throw data[5].error;
+    setCompany(data[5].data);
+    setInvitations(data[6]);
   }, []);
   useEffect(() => {
     if (!supabase) {
@@ -143,6 +168,11 @@ export default function App() {
       if (event === "PASSWORD_RECOVERY") setWelcome(true);
       if (!s) {
         setProfile(null);
+        setCompany(null);
+        setPeople([]);
+        setAssignments([]);
+        setEvents([]);
+        setInvitations([]);
         setConsent(false);
         setProjects([]);
         setSessions([]);
@@ -187,17 +217,6 @@ export default function App() {
     const r = await supabase!.from(table).update(value).eq("id", id);
     if (r.error) throw r.error;
     await refresh();
-  };
-  const login = (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const f = new FormData(e.currentTarget);
-    void run(async () => {
-      const { error } = await supabase!.auth.signInWithPassword({
-        email: String(f.get("email")),
-        password: String(f.get("password")),
-      });
-      if (error) throw error;
-    });
   };
   const status = (s: Attendance) => {
     const e = events.find((e) => e.attendance_session_id === s.id);
@@ -333,56 +352,7 @@ export default function App() {
             <ShieldCheck /> Acceso seguro · Horario de Guatemala
           </div>
         </div>
-        <form className="card login-form" onSubmit={login}>
-          <h2>Bienvenido a ControlGPS</h2>
-          <p>Inicia sesión con tu cuenta de trabajo.</p>
-          <label>
-            Correo electrónico
-            <input
-              required
-              name="email"
-              type="email"
-              autoComplete="username"
-              placeholder="nombre@empresa.com"
-            />
-          </label>
-          <label>
-            Contraseña
-            <input
-              required
-              name="password"
-              type="password"
-              autoComplete="current-password"
-            />
-          </label>
-          <button disabled={busy} className="primary">
-            {busy ? "Ingresando…" : "Iniciar sesión"}
-          </button>
-          <button
-            type="button"
-            className="text-button"
-            onClick={(e) => {
-              const form = e.currentTarget.form!;
-              const email = String(new FormData(form).get("email"));
-              void run(async () => {
-                if (!email) throw Error("Escribe tu correo primero.");
-                const r = await supabase!.auth.resetPasswordForEmail(email, {
-                  redirectTo: location.origin + "/?welcome=1",
-                });
-                if (r.error) throw r.error;
-                notify("Si el correo está registrado, recibirás un enlace.");
-              });
-            }}
-          >
-            Recuperar contraseña
-          </button>
-          {message && (
-            <div role="alert" className="notice">
-              {message}
-            </div>
-          )}
-          <small>Las cuentas son creadas por tu administrador.</small>
-        </form>
+        <AuthPanel />
       </div>
     );
   if (welcome)
@@ -423,6 +393,16 @@ export default function App() {
         </form>
       </div>
     );
+  if (!profile) {
+    return loading ? (
+      <div className="setup">
+        <Brand />
+        <div className="card">Verificando tu cuenta…</div>
+      </div>
+    ) : (
+      <Onboarding onComplete={refresh} />
+    );
+  }
   const admin = profile?.role === "admin";
   const menu = admin
     ? ([
@@ -430,6 +410,7 @@ export default function App() {
         ["Proyectos", Building2],
         ["Empleados", Users],
         ["Asistencias", ClipboardList],
+        ["Empresa", Settings],
       ] as const)
     : ([
         ["Mi jornada", Navigation],
@@ -484,7 +465,7 @@ export default function App() {
       <div className="main">
         <header>
           <div>
-            <span className="dot" /> Gestión por proyecto
+            <span className="dot" /> {company?.name || "Gestión por proyecto"}
           </div>
           <div className="user">
             <span className="avatar">
@@ -629,6 +610,9 @@ export default function App() {
                   <div className="notice">{limitation}</div>
                 </>
               )}
+              {admin && page === "Empresa" && company && (
+                <CompanySettings company={company} onSaved={refresh} />
+              )}
               {admin && page === "Proyectos" && (
                 <>
                   <div className="toolbar">
@@ -743,7 +727,7 @@ export default function App() {
                           form.reset();
                           await refresh();
                           notify(
-                            "Cuenta existente agregada a ControlGPS. Puede iniciar sesión con su contraseña actual.",
+                            "Invitación creada. Comparte el enlace de ControlGPS; el empleado debe iniciar sesión y aceptarla.",
                           );
                           return;
                         }
@@ -778,8 +762,8 @@ export default function App() {
                     <div>
                       <h2>Agregar empleado</h2>
                       <p>
-                        Invita una cuenta nueva o agrega una cuenta existente de
-                        Supabase.
+                        Invita una cuenta nueva o existente. El empleado debe
+                        aceptar la invitación con su correo.
                       </p>
                     </div>
                     <label>
@@ -797,6 +781,10 @@ export default function App() {
                       Agregar cuenta existente
                     </button>
                   </form>
+                  <InvitationsPanel
+                    invitations={invitations}
+                    onSaved={refresh}
+                  />
                   <div className="card">
                     <h2>Directorio de empleados</h2>
                     {people
@@ -925,6 +913,7 @@ export default function App() {
                             lat={activeProject.latitude}
                             lng={activeProject.longitude}
                             radius={activeProject.radius_m}
+                            point={monitor.point || preview}
                           />
                           <h3>{activeProject.name}</h3>
                           <p>{activeProject.address}</p>

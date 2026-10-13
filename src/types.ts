@@ -1,9 +1,25 @@
 export type Profile = {
+  company_id: string;
   id: string;
   full_name: string;
   email: string;
   role: "admin" | "employee";
   active: boolean;
+};
+export type Company = {
+  id: string;
+  name: string;
+  owner_id: string;
+  active: boolean;
+  created_at: string;
+};
+export type CompanyInvitation = {
+  id: string;
+  email: string;
+  full_name: string;
+  expires_at: string;
+  accepted_at: string | null;
+  revoked_at: string | null;
 };
 export type Project = {
   id: string;

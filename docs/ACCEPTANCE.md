@@ -2,12 +2,14 @@
 
 Estado inicial: **pendiente**. Usar dos cuentas de empleado, una de administrador y un teléfono con GPS, bajo HTTPS. No introducir registros de prueba en producción como si fueran jornadas reales. Registrar fecha, navegador, usuario de prueba y resultado de cada caso. La ubicación falsa en herramientas de desarrollo sirve para verificar reglas, no para probar GPS físico.
 
-- [ ] Ejecutar la migración en Supabase sin errores; confirmar RLS en las siete tablas, índice `one_open_shift` y permisos de funciones. Conservar la configuración de registro de Business Helper. Verificar que registros públicos no reciben asignaciones ni roles admin en ControlGPS.
-- [ ] Crear el usuario administrador desde el dashboard; habilitar solo el UUID verificado en controlgps.profiles mediante SQL; ingresar y comprobar navegación administrativa.
-- [ ] Crear usuario con metadatos `role:admin` en entorno de prueba y verificar que su perfil sigue siendo employee. El cliente no puede actualizar su rol.
+- [ ] Verificar ambas migraciones sin repetirlas; RLS en nueve tablas, company_id, llaves compuestas y índice one_open_shift. Mantener confirmación de correo y los redirects de Business Helper.
+- [ ] Crear cuenta desde la app, confirmar correo y crear empresa. Solo administra la nueva empresa. Crear otra empresa con otra cuenta; un correo sin confirmar no puede crearla.
+- [ ] Metadatos role:admin y company_id ajeno no conceden perfil, rol ni membresía. El cliente no puede actualizar su rol.
+- [ ] Admin B no puede leer/modificar proyectos, perfiles, jornadas, eventos, ajustes o invitaciones de A, ni asignar empleados ajenos. Validar también las RPC.
+- [ ] Renovar/revocar invitaciones. Otro correo o una invitación expirada/revocada no concede acceso. Una cuenta desactivada no puede crear otra empresa para evadir controles.
 - [ ] Crear proyecto con pin en mapa, radio 100, nombre y dirección. Mover pin y ajustar radio; el círculo cambia. Guardar, recargar y verificar coordenadas persistidas. Probar radios 9 y 10001: rechazados por base de datos.
 - [ ] Editar y archivar proyecto. Empleado no puede iniciar allí; historial se conserva. Reactivarlo.
-- [ ] Invitar empleado con SMTP real. Confirmar correo y link; establecer contraseña de 12+ caracteres; salir y volver a ingresar con ella. Intentar invitación como empleado/sin token: 403/401, sin crear usuario.
+- [ ] Invitar empleado con SMTP real; abrir correo, establecer contraseña y aceptar invitación antes de asignar proyectos. Para cuenta existente: compartir enlace y aceptar sin cambiar contraseña. Como empleado/sin token: 403/401, sin crear usuario.
 - [ ] Asignar empleado al proyecto, recargar y comprobar que solo ve proyectos autorizados. Desasignar y comprobar que la entrada es denegada por el servidor.
 - [ ] Con segundo empleado, consultar perfiles/asistencias/eventos del primero usando API: datos inaccesibles. Intentar insertar o actualizar asistencia directa: denegado.
 - [ ] Dentro del radio, aceptar monitoreo y Marcar entrada. Probar permiso denegado antes de permitirlo. No debe existir registro al denegar. Permitir GPS; confirmar precisión ≤50 m, hora del servidor y jornada abierta.
@@ -27,3 +29,5 @@ Estado inicial: **pendiente**. Usar dos cuentas de empleado, una de administrado
 - [ ] Vercel muestra deploy exitoso, URL HTTPS accesible; configurar esa URL en Supabase y CONTROLGPS_APP_ORIGINS y repetir login/invitación/GPS antes de habilitar empleados.
 
 No se han marcado estos casos como realizados: necesitan credenciales, correo y dispositivos reales.
+
+Automatizado por separado: SQL/PGlite y Chromium con GPS controlado. El Supabase alojado se probó mediante scripts/verify-tenancy-live.sql con rollback completo; no quedaron cuentas ni jornadas de prueba. Correo y GPS físico requieren aceptación manual.

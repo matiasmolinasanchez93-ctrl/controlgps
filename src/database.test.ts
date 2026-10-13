@@ -32,6 +32,18 @@ beforeAll(async () => {
   await db.exec(
     `insert into auth.users values('${admin}','admin@example.com','{"full_name":"Admin","role":"admin","controlgps_enrolled":true}'),('${emp}','empleado@example.com','{"controlgps_enrolled":true}'),('${other}','otro@example.com','{"controlgps_enrolled":true}');update controlgps.profiles set role='admin' where id='${admin}';insert into controlgps.projects(id,name,latitude,longitude,created_by) values('${project}','Obra',0,0,'${admin}');insert into controlgps.project_assignments(project_id,employee_id) values('${project}','${emp}');`,
   );
+  await db.exec(
+    "alter table auth.users add column email_confirmed_at timestamptz default now();",
+  );
+  await db.exec(
+    readFileSync(
+      new URL(
+        "../supabase/migrations/202610130002_companies.sql",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  );
 }, 30000);
 afterAll(() => db.close());
 describe.sequential("Backend real PostgreSQL embebido", () => {
@@ -44,7 +56,7 @@ describe.sequential("Backend real PostgreSQL embebido", () => {
       r.rows.every((row) => row.name === "Nombre de Business Helper"),
     ).toBe(true);
     await db.exec(
-      `insert into auth.users values('90000000-0000-0000-0000-000000000001','existente@example.com','{}')`,
+      `insert into auth.users(id,email,raw_user_meta_data) values('90000000-0000-0000-0000-000000000001','existente@example.com','{}')`,
     );
     expect(
       (
@@ -69,18 +81,28 @@ describe.sequential("Backend real PostgreSQL embebido", () => {
       ),
     ).rejects.toThrow("Acceso");
     await asUser(admin);
-    await db.query(
-      "select controlgps.enroll_employee('existente@example.com','Empleado existente')",
+    const invitation = await db.query<{ id: string }>(
+      "select controlgps.enroll_employee('existente@example.com','Empleado existente') as id",
     );
+    await asUser("90000000-0000-0000-0000-000000000001");
+    await db.query(
+      `select controlgps.accept_invitation('${invitation.rows[0].id}')`,
+    );
+    await asUser(admin);
     const r = await db.query<{ role: string }>(
       "select role from controlgps.profiles where email='existente@example.com'",
     );
     expect(r.rows[0].role).toBe("employee");
-    await expect(
-      db.query(
-        "select controlgps.enroll_employee('noexiste@example.com','Empleado')",
-      ),
-    ).rejects.toThrow("cuenta existente");
+    await db.query(
+      "select controlgps.enroll_employee('noexiste@example.com','Empleado')",
+    );
+    expect(
+      (
+        await db.query(
+          "select * from controlgps.profiles where email='noexiste@example.com'",
+        )
+      ).rows,
+    ).toHaveLength(0);
     await db.exec("reset role");
     expect(
       (

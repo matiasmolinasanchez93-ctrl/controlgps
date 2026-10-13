@@ -70,6 +70,14 @@ export function friendlyError(error: unknown) {
   if (/fetch|network/i.test(m))
     return "Sin conexión. La operación no se confirmó; revisa los registros antes de reintentar.";
   if (/Invalid login/i.test(m)) return "Correo o contraseña incorrectos.";
+  if (/email not confirmed/i.test(m))
+    return "Confirma tu correo electrónico antes de iniciar sesión.";
+  if (/already registered|already exists/i.test(m))
+    return "Ya existe una cuenta con ese correo. Inicia sesión o recupera tu contraseña.";
+  if (/signup.*disabled|signups not allowed/i.test(m))
+    return "El registro está deshabilitado en Supabase. Contacta al administrador del servicio.";
+  if (/security purposes|email.*seconds/i.test(m))
+    return "Espera un minuto antes de solicitar otro correo.";
   if (/JWT|expired/i.test(m))
     return "La sesión expiró. Inicia sesión de nuevo.";
   if (/rate limit/i.test(m)) return "Demasiados intentos. Espera unos minutos.";

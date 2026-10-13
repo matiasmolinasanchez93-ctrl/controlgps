@@ -18,6 +18,7 @@ export function useMonitor(
       last = 0,
       busy = false,
       lastSent = 0;
+    let generation = 0;
     const signal = async (value: string) => {
       const { error } = await db.rpc("record_location", {
         p_session: sessionId,
@@ -26,12 +27,17 @@ export function useMonitor(
       if (error && alive) onError(error.message);
     };
     const stop = () => {
+      generation++;
       if (watch !== undefined) navigator.geolocation.clearWatch(watch);
       watch = undefined;
       setStatus("Ubicación sin verificar");
     };
     const start = () => {
       if (document.hidden) return;
+      const current = ++generation;
+      lastSent = 0;
+      last = 0;
+      busy = false;
       void signal("monitoring_resumed");
       if (!navigator.geolocation) {
         onError("Este navegador no admite GPS.");
@@ -39,7 +45,7 @@ export function useMonitor(
       }
       watch = navigator.geolocation.watchPosition(
         async (p) => {
-          if (!alive) return;
+          if (!alive || current !== generation) return;
           const v = {
             latitude: p.coords.latitude,
             longitude: p.coords.longitude,
@@ -63,8 +69,8 @@ export function useMonitor(
             p_accuracy: v.accuracy,
             p_measured: new Date(v.timestamp).toISOString(),
           });
+          if (!alive || current !== generation) return;
           busy = false;
-          if (!alive) return;
           if (error) {
             last = 0;
             setStatus("Ubicación sin verificar");
@@ -75,6 +81,7 @@ export function useMonitor(
           }
         },
         (e) => {
+          if (!alive || current !== generation) return;
           last = 0;
           setStatus("Ubicación sin verificar");
           onError(locationError(e.code));

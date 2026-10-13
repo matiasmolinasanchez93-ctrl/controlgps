@@ -4,11 +4,13 @@ Aplicación React/Vite/TypeScript/Tailwind, Supabase Auth/PostgreSQL y Leaflet/O
 
 ## Estado y bloqueadores
 
-Conectado al proyecto Supabase existente **buisness helper** (`jxejohnwplnmxdzzkhen`). La migración está aplicada en el esquema separado `controlgps`, la API está expuesta y la función `controlgps-invite-employee` está desplegada. El administrador es `matias.molinasanchez93@gmail.com`, con su cuenta y contraseña actuales. `.env` contiene únicamente configuración pública y está ignorado por Git.
+Conectado al proyecto Supabase existente **buisness helper** (`jxejohnwplnmxdzzkhen`). Ambas migraciones están aplicadas en el esquema separado `controlgps`, la API está expuesta y la función `controlgps-invite-employee` está desplegada. El equipo anterior se conserva en **Mi empresa**, editable por su administrador `matias.molinasanchez93@gmail.com`. `.env` y `.env.local` están ignorados por Git y excluidos del despliegue.
 
 Las 15 tablas públicas originales y el trigger `public.handle_new_user` se conservaron. ControlGPS usa perfiles y permisos propios. Los usuarios y contraseñas de Auth se comparten: cambiar una contraseña o recuperar una cuenta afecta su acceso a ambas aplicaciones. Un usuario nuevo de ControlGPS también pasa por el trigger original de Business Helper; los usuarios creados desde Business Helper no se agregan automáticamente a ControlGPS.
 
-Verificados TypeScript, compilación, pruebas de PostgreSQL embebido, acceso del rol administrador en la base alojada y rechazo de acceso anónimo por Data API. **Pendientes:** login interactivo con contraseña del usuario, correo SMTP/redirects, GPS físico, verificación visual en navegador y Vercel. Antes de usar con empleados, completa la lista de aceptación. La web corre localmente; no se ha publicado en Vercel.
+Registro de cuentas, creación de empresas, invitaciones aceptadas por el empleado y aislamiento de datos por empresa. Consulta `docs/COMPANIES.md` para empezar. Proyecto Vercel: `streak6/controlgps`, dominio de producción `https://controlgps-cyan.vercel.app`.
+
+Verificados TypeScript, compilación, PostgreSQL embebido, Chromium con GPS controlado y una transacción en Supabase real con rollback completo. **Pendientes de aceptación física:** entrega real de correo, GPS Android/iOS y bloqueo del teléfono. Los redirects de confirmación/invitación y el origen de producción están configurados. Antes de usar con empleados, completa la lista de aceptación.
 
 ## Requisitos y ejecución
 
@@ -34,28 +36,18 @@ No uses valores de ejemplo en producción. Cambiar variables en Vercel requiere 
 ## Base de datos y Auth
 
 1. La carpeta ya está vinculada a **buisness helper**. Para otro proyecto: `supabase link --project-ref TU_REF`.
-2. La migración inicial ya fue aplicada al proyecto conectado; **no vuelvas a ejecutarla allí ni uses db reset**. En un proyecto nuevo, ejecuta `supabase/migrations/202610130001_controlgps.sql` como propietario. Crea únicamente el esquema `controlgps` y un trigger de nombre independiente, sin cambiar tablas ni funciones públicas.
-3. Los usuarios no pueden elegir su rol: el trigger crea `employee` solo para invitaciones marcadas `controlgps_enrolled:true`. No cambies el registro público ni las políticas globales de Auth sin considerar Business Helper. Una cuenta registrada públicamente no recibe privilegios de ControlGPS.
-4. En Authentication → URL Configuration, **conserva Site URL y las URLs existentes de Business Helper**. Añade a Redirect URLs `http://localhost:5173/?welcome=1`, `http://127.0.0.1:5173/?welcome=1` y, cuando esté disponible, `https://TU-DOMINIO/?welcome=1`. Esta configuración de redirects sigue pendiente de revisión; es necesaria para que invitación y recuperación regresen a ControlGPS.
-5. Configura SMTP para invitaciones y recuperación. Verifica remitente, límites y entrega. No consideres una respuesta del API garantía de recepción del correo.
+2. Las migraciones `202610130001_controlgps.sql` y `202610130002_companies.sql` ya están aplicadas; **no repitas ni uses db reset**. En otro proyecto ejecútalas en ese orden. La segunda preserva los datos previos en una empresa; en un proyecto vacío, las empresas se crean desde la app.
+3. Activa email/password, permite registro y exige confirmación de correo. Los metadatos no conceden roles ni membresías. `create_company` asigna admin únicamente a su propia empresa; `accept_invitation` crea empleados únicamente mediante invitaciones privadas verificadas por correo.
+4. Conserva Site URL y redirects de Business Helper. Añade `/?welcome=1` y `/?confirmed=1` para los orígenes de ControlGPS. El proyecto conectado incluye localhost:5173, 127.0.0.1:5173 y controlgps-cyan.vercel.app. `supabase/config.toml` conserva la Site URL original `https://mindforgecpa.vercel.app` y exige confirmación. No sincronices una configuración incompleta: la CLI puede aplicar valores predeterminados a servicios compartidos.
+5. Configura SMTP de producción para aceptar cualquier destinatario, confirma remitente y límites. El servicio de correo predeterminado de Supabase tiene restricciones. No se han suministrado credenciales de SMTP externo; valida entrega y spam con una cuenta real. Una respuesta del API no garantiza entrega.
 
 Exposición de API: el proyecto conectado ya expone `controlgps` mediante una configuración del rol `authenticator` que conserva `public,graphql_public`. En otro proyecto añade `controlgps` a Data API → Exposed schemas **conservando todos los esquemas existentes**, o revisa `scripts/expose-controlgps.sql` antes de ejecutarlo (su fallback asume los esquemas estándar). [Esquemas personalizados](https://supabase.com/docs/guides/api/using-custom-schemas). La migración fue ejecutada con `supabase db query --linked --file ...`; no registra automáticamente historial de migraciones. Para futuras migraciones, concilia el historial del proyecto antes de utilizar db push.
 
 ### Crear el primer administrador de forma segura
 
-La cuenta indicada ya está habilitada como admin de ControlGPS. En otro entorno, usa una cuenta existente o crea un usuario desde Authentication → Users y copia su UUID verificado. Ejecuta únicamente desde SQL Editor del propietario:
+La cuenta indicada ya administra el equipo conservado. Para una empresa nueva, usa **Crear cuenta**, confirma el correo e inicia sesión. En **Tu espacio de trabajo** pulsa **Crear mi empresa**. El servidor asigna el rol admin con identidad autenticada y en una transacción; no hace falta promover usuarios mediante SQL.
 
-```sql
-insert into controlgps.profiles(id, full_name, email, role)
-select id, coalesce(nullif(raw_user_meta_data->>'full_name',''),split_part(email,'@',1)), email, 'admin'
-from auth.users where id = 'UUID-VERIFICADO-DEL-USUARIO'::uuid
-on conflict(id) do update set role='admin', active=true;
-select id, email, full_name, role, active
-from controlgps.profiles
-where id = 'UUID-VERIFICADO-DEL-USUARIO'::uuid;
-```
-
-Comprueba que el correo y UUID corresponden al administrador. No existe endpoint público de bootstrap ni selección de rol desde el cliente. No pongas credenciales administrativas en archivos del repositorio. Guarda el acceso al dashboard de Supabase con MFA.
+Una cuenta pertenece a una empresa en este MVP. Para otra empresa utiliza otra cuenta. No se permite mover cuentas ni historial entre empresas. Una cuenta desactivada tampoco puede crear otra empresa para evadir controles. Protege el acceso al dashboard de Supabase con MFA.
 
 ### Invitaciones de empleados
 
@@ -66,25 +58,25 @@ supabase secrets set CONTROLGPS_APP_ORIGINS=https://TU-DOMINIO
 supabase functions deploy controlgps-invite-employee
 ```
 
-Supabase proporciona a la función `SUPABASE_URL`, `SUPABASE_ANON_KEY` y `SUPABASE_SERVICE_ROLE_KEY`. Esta última **solo se utiliza en la función**, nunca en Vite/Vercel frontend. `CONTROLGPS_APP_ORIGINS` acepta orígenes separados por coma, sin barra final. Actualmente permite `http://localhost:5173,http://127.0.0.1:5173`. Al publicar, configura la URL definitiva y revisa los redirects de Auth. El nombre del secreto es específico de ControlGPS para evitar conflictos con otras funciones.
+Supabase proporciona a la función `SUPABASE_URL`, `SUPABASE_ANON_KEY` y `SUPABASE_SERVICE_ROLE_KEY`. Esta última **solo se utiliza en la función**, nunca en Vite/Vercel frontend. `CONTROLGPS_APP_ORIGINS` acepta orígenes separados por coma, sin barra final. Actualmente permite `http://localhost:5173,http://127.0.0.1:5173,https://controlgps-cyan.vercel.app`. El nombre del secreto es específico de ControlGPS para evitar conflictos con otras funciones.
 
 En PowerShell, encierra entre comillas el argumento cuando contiene comas: `supabase secrets set 'CONTROLGPS_APP_ORIGINS=http://localhost:5173,http://127.0.0.1:5173'`.
 
 `verify_jwt=false` es intencional para compatibilidad con claves modernas: el endpoint verifica manualmente el token mediante `auth.getUser(token)`, exige un perfil admin activo y comprueba el origen. No acepta peticiones sin autenticación. No utiliza el rol de metadatos del usuario. [API oficial de invitación](https://supabase.com/docs/reference/javascript/auth-admin-inviteuserbyemail).
 
-En Empleados, introduce nombre y correo → Enviar invitación. El perfil aparece tras confirmar la creación del usuario en Auth. El empleado abre el correo y establece su contraseña. Usa las casillas del directorio para asignar/desasignar proyectos. Desactivar acceso bloquea lecturas de registros y acciones aunque el token siga vigente; conserva el historial. Si tiene una jornada abierta al desactivarlo, el administrador debe cerrarla mediante ajuste auditado.
+En Empleados, introduce nombre y correo → Enviar invitación. Se crea una invitación privada de 7 días. El empleado abre el correo, establece contraseña, inicia sesión y **acepta la invitación**; entonces aparece en el directorio. Puedes revocar o renovar invitaciones pendientes. Si falla el correo, se muestra el fallo y la invitación queda pendiente para reintentar. Asigna proyectos mediante las casillas del directorio. Desactivar bloquea acceso y conserva historial; el administrador puede cerrar jornadas pendientes con ajuste auditado.
 
-Si el correo ya existe en Supabase, utiliza **Agregar cuenta existente**. La función `controlgps.enroll_employee` exige admin activo, agrega un perfil de empleado en ControlGPS y no altera su contraseña ni su perfil en Business Helper. Una invitación nueva no puede reemplazar una cuenta existente. Para que Business Helper conserve su funcionamiento, no uses el panel de Auth para borrar/desactivar usuarios compartidos: usa Desactivar en el directorio de ControlGPS.
+Para un correo existente utiliza **Agregar cuenta existente** y comparte el enlace de acceso. La función crea una invitación, sin asignación automática ni cambio de contraseña. El empleado debe aceptarla. Si la función de correo detecta una cuenta existente, informa que hay invitación disponible y que no envió un correo nuevo. Una cuenta de otra empresa no puede ser capturada. No borres/desactives Auth de usuarios compartidos: usa Desactivar en ControlGPS.
 
 ## Comportamiento y seguridad
 
-- RLS en todas las tablas. Solo el administrador administra proyectos/asignaciones. Empleados ven su perfil, sus asignaciones y registros; proyectos asignados y proyectos de su historial para poder identificar jornadas archivadas. No se permiten escrituras directas sobre asistencias, eventos ni perfiles.
+- RLS en todas las tablas, incluido empresas e invitaciones. `company_id` obligatorio y llaves compuestas impiden cruces entre empresas. Cada administrador gestiona únicamente su empresa; también las RPC con privilegios elevados filtran su empresa. Empleados ven solo sus propios registros y proyectos autorizados. No se permiten escrituras directas sobre asistencias, eventos ni perfiles.
 - `check_in` deriva empleado de `auth.uid()`, exige cuenta activa, proyecto activo, asignación activa, coordenadas válidas, precisión ≤50 m y distancia ≤radio. Valida lectura reportada ≤30 s. Advisory lock e índice parcial único impiden dos jornadas abiertas. Las horas se generan en la base de datos.
 - El empleado debe aceptar el monitoreo antes de entrada. Entrada solicita `enableHighAccuracy`, `maximumAge:0`, `timeout:15000`. No registra éxito antes de respuesta del servidor. Un error de red se muestra y exige revisar/actualizar antes de reintentar.
 - `record_location` vuelve a calcular distancia en el servidor. Dos lecturas válidas consecutivas fuera de radio+15 m producen salida de zona. Una lectura dentro del radio registra retorno. Una interrupción/mala precisión rompe la secuencia; mediciones repetidas se ignoran. Se guardan hora reportada y hora de recepción. Las muestras exteriores periódicas sirven como heartbeat cada ≥30 s, y el reporte cuenta transiciones, no heartbeats.
 - No se obtienen coordenadas fuera de jornada salvo el intento de entrada iniciado por empleado. La edición administrativa del mapa no solicita GPS. Consultar permisos no lee ubicación.
 - La salida manual permite estar fuera del radio; exige motivo de ≥5 caracteres fuera de zona o sin GPS. La salida sin GPS registra coordenadas nulas. Nunca cierra la jornada automáticamente por una pérdida de seguimiento.
-- Cambiar de pestaña detiene el watch y marca falta de verificación; regresar lo reinicia con consentimiento vigente. Una jornada recuperada al recargar requiere aceptar otra vez el monitoreo. Datos antiguos o eventos de indisponibilidad se muestran sin ubicación reciente.
+- Cambiar de pestaña detiene el watch; regresar reinicia inmediatamente la lectura con consentimiento vigente. Respuestas pendientes del watch anterior no restauran estados obsoletos. Al recargar se acepta nuevamente el monitoreo. Datos antiguos o eventos de indisponibilidad se muestran sin ubicación reciente. El mapa muestra la última lectura del empleado y su precisión, sin iniciar lecturas por sí mismo.
 - Correcciones desde Asistencias → Corregir exigen admin activo y motivo. La función guarda antes/después, autor y fecha en `attendance_adjustments`, sin permitir al cliente modificar la auditoría. Valores de fecha en el formulario corresponden a Guatemala.
 - Los reportes filtran por fecha de entrada en Guatemala; jornadas abiertas no tienen duración final. La tarjeta de horas de hoy incluye solo la parte de jornadas finalizadas que coincide con hoy. CSV UTF-8 con BOM y comillas, compatible con Excel y protegido contra fórmulas.
 - Deshabilitar/archivar no elimina historial. No hay borrado de empleados/proyectos en el cliente.
@@ -109,14 +101,20 @@ Predeterminados: radio 100 m, radio válido 10–10000 m, precisión máxima 50 
 npm run typecheck
 npm test
 npm run build
+npx playwright install chromium
+npm run test:e2e
 npm audit
 ```
 
-Las pruebas SQL ejecutan la migración real en PGlite con roles `anon`/`authenticated` y un `auth.uid()` de prueba. Verifican RLS, rechazo anónimo, no asignado, GPS malo, radio inválido, fuera de zona, entrada duplicada, dos muestras exteriores, retorno, salida exterior y auditoría. No sustituyen una ejecución de aceptación en Supabase; en particular no simulan procesos PostgreSQL concurrentes independientes, el gateway Edge, SMTP, OAuth ni teléfonos físicos. Consulta `docs/ACCEPTANCE.md`.
+SQL/PGlite ejecuta ambas migraciones con roles reales y verifica geofencing, RLS, horarios, aislamiento entre empresas e invitaciones. Chromium usa un adaptador HTTP conectado a esa base y GPS controlado, sin producción ni envío de correo. Verifica registro, empresa, permisos/timeout, mala precisión, fuera de zona, monitoreo/retorno, stale GPS, checkout sin GPS, visibilidad, mapas móviles y tiles fallidos. GitHub Actions ejecuta esas pruebas, TypeScript y build sin credenciales reales.
+
+`scripts/verify-tenancy-live.sql` también verifica empresas, invitación aceptada, entrada, salida de zona, checkout exterior y aislamiento en el Supabase alojado; todo se revierte al terminar. Las comprobaciones no sustituyen SMTP, GPS físico ni concurrencia PostgreSQL de procesos independientes. Consulta `docs/ACCEPTANCE.md`.
 
 ## Organización
 
 - `src/App.tsx`: autenticación, administración, jornada, reportes y ajustes.
+- `src/AuthPanel.tsx`, `src/Onboarding.tsx`: registro, creación de empresa y aceptación.
+- `src/CompanySettings.tsx`, `src/InvitationsPanel.tsx`: empresa e invitaciones.
 - `src/Map.tsx`: Leaflet y radio interactivo.
 - `src/useMonitor.ts`: consentimiento, watchPosition y visibilidad.
 - `src/geo.ts`: Haversine, validación y estado GPS.
@@ -124,5 +122,6 @@ Las pruebas SQL ejecutan la migración real en PGlite con roles `anon`/`authenti
 - `supabase/migrations/`: esquema, índices, RLS y RPC seguras.
 - `supabase/functions/controlgps-invite-employee/`: invitaciones verificadas en servidor.
 - `docs/ACCEPTANCE.md`: validación manual obligatoria antes de operación.
+- `e2e/`, `.github/workflows/ci.yml`: pruebas de navegador y verificación continua.
 
 Las invitaciones y RLS siguen los flujos documentados por [Supabase Auth](https://supabase.com/docs/guides/auth/users) y [RLS](https://supabase.com/docs/guides/database/postgres/row-level-security).

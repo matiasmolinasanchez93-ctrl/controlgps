@@ -1,4 +1,58 @@
 @import "tailwindcss";
+.auth-tabs {
+  display: flex;
+  gap: 6px;
+  background: #f1f5f9;
+  padding: 4px;
+  border-radius: 9px;
+  margin-bottom: 24px;
+}
+.auth-tabs button {
+  border: 0;
+  background: none;
+  margin: 0 !important;
+  font-size: 12px;
+}
+.auth-tabs button.active {
+  background: white;
+  color: #047857;
+  box-shadow: 0 1px 4px #0f172a12;
+}
+.auth-note {
+  display: flex;
+  gap: 8px;
+  color: #64748b;
+  line-height: 1.7;
+  font-size: 11px;
+  padding-top: 15px;
+  border-top: 1px solid #e2e8f0;
+}
+.onboarding label {
+  margin: 20px 0;
+}
+.onboarding h2 svg {
+  display: inline-block;
+  vertical-align: middle;
+}
+.onboarding .project-icon {
+  margin-bottom: 18px;
+}
+.invitation-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 0;
+  border-top: 1px solid #edf1f5;
+}
+.company-form {
+  max-width: 520px;
+  display: grid;
+  gap: 20px;
+}
+.onboarding .section-head h1 {
+  font-size: 26px;
+}
 :root {
   font-family:
     Inter,
