@@ -1,0 +1,2 @@
+[functions.controlgps-invite-employee]
+verify_jwt = false
